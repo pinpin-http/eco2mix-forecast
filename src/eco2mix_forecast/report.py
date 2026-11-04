@@ -30,7 +30,8 @@ LABELS = {
     "lightgbm_fc_d1": "LightGBM (météo prévue à 24 h)",
     "lightgbm_obs": "LightGBM (météo observée)",
     "rte_j1": "RTE, prévision J-1",
-    "rte_j1_debiaisee": "RTE J-1 corrigée du biais (contrôle)",
+    "rte_j1_debiaisee": "RTE J-1 recalée (écart constant)",
+    "rte_j1_profil": "RTE J-1 recalée (mois × demi-heure)",
     "persistance_j7": "Persistance J-7",
     "moyenne_saisonniere": "Moyenne saisonnière",
 }
@@ -85,7 +86,7 @@ def fig_week(test: pd.DataFrame) -> None:
 def fig_error_by_hour(by_hour: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(10, 4.8))
     series = [("lightgbm_fc_d2", BLUE, "-"), ("lightgbm_obs", AQUA, "--"),
-              ("rte_j1", ORANGE, "-"), ("rte_j1_debiaisee", YELLOW, "--")]
+              ("rte_j1", ORANGE, "-"), ("rte_j1_profil", YELLOW, "--")]
     for m, color, ls in series:
         d = by_hour[by_hour["model"] == m].sort_values("group")
         ax.plot(d["group"], d["mape"], color=color, ls=ls, label=LABELS[m], marker="o", ms=4)
@@ -166,7 +167,7 @@ def fig_temperature(df: pd.DataFrame, cal: pd.DataFrame) -> None:
 def fig_backtest(by_year: pd.DataFrame, best: str) -> None:
     models = [(f"lightgbm_{best}", BLUE, "LightGBM (météo observée)"),
               ("rte_j1", ORANGE, LABELS["rte_j1"]),
-              ("rte_j1_debiaisee", YELLOW, LABELS["rte_j1_debiaisee"])]
+              ("rte_j1_profil", YELLOW, LABELS["rte_j1_profil"])]
     years = sorted(by_year["group"].unique())
     x = np.arange(len(years))
     width = 0.26
@@ -213,6 +214,9 @@ def _pivot(df: pd.DataFrame, models: list[str], metric: str, nd: int,
     return "\n".join([head, sep] + rows)
 
 
+RTE = ["rte_j1", "rte_j1_debiaisee", "rte_j1_profil"]
+
+
 def write_tables() -> None:
     res = config.RESULTS_DIR
     out = []
@@ -230,12 +234,12 @@ def write_tables() -> None:
         season = pd.read_csv(res / f"{prefix}test_by_season.csv")
         season["group"] = pd.Categorical(season["group"], ["hiver", "printemps", "été", "automne"])
         season = season.sort_values("group")
-        models = ["lightgbm_fc_d2", "lightgbm_obs"] + (["rte_j1", "rte_j1_debiaisee"] if rte else []) \
+        models = ["lightgbm_fc_d2", "lightgbm_obs"] + (RTE if rte else []) \
             + ["persistance_j7"]
         out.append(f"\n### MAPE (%) par saison, {title}\n")
         out.append(_pivot(season, models, "mape", 2))
         by_year = pd.read_csv(res / f"{prefix}backtest_by_year.csv")
-        models = [best] + (["rte_j1", "rte_j1_debiaisee"] if rte else []) \
+        models = [best] + (RTE if rte else []) \
             + ["persistance_j7", "moyenne_saisonniere"]
         alt = "lightgbm_absolute" if best == "lightgbm_ratio" else "lightgbm_ratio"
         names = {"lightgbm_absolute": "LightGBM, cible en MW", "lightgbm_ratio": "LightGBM, cible ratio"}

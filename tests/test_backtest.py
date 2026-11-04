@@ -99,12 +99,19 @@ def test_rte_bias_correction_uses_previous_year_only():
     load = pd.DataFrame(50000.0, index=days, columns=range(48))
     rte = load.copy()
     rte.loc["2023"] -= 1000.0
+    rte.loc["2023-06", 10] -= 1000.0   # écart plus fort en juin à 05:00
     rte.loc["2024"] -= 400.0
     empty = load * np.nan
     m = Matrices(load, empty, empty, empty, rte, pd.DataFrame(index=days))
     idx = pd.MultiIndex.from_product([days, range(48)], names=["date", "slot"])
     out = rte_columns(m, idx)
-    # 2024 corrigée avec le biais de 2023 (-1000 MW) : 49600 + 1000
-    assert out.loc[(pd.Timestamp("2024-06-01"), 10), "rte_j1_debiaisee"] == pytest.approx(50600.0)
+    # 2024 corrigée avec l'écart moyen de 2023 : -1000 MW, plus les 30 créneaux de juin à -2000
+    bias_2023 = -1000.0 - 1000.0 * 30 / (365 * 48)
+    assert out.loc[(pd.Timestamp("2024-06-01"), 10), "rte_j1_debiaisee"] == pytest.approx(49600.0 - bias_2023)
+    # recalage par mois et demi-heure : juin, créneau 10, écart de -2000 MW en 2023
+    assert out.loc[(pd.Timestamp("2024-06-01"), 10), "rte_j1_profil"] == pytest.approx(51600.0)
+    assert out.loc[(pd.Timestamp("2024-06-01"), 11), "rte_j1_profil"] == pytest.approx(50600.0)
+    assert out.loc[(pd.Timestamp("2024-07-01"), 10), "rte_j1_profil"] == pytest.approx(50600.0)
     # 2023 : pas d'année précédente disponible
     assert np.isnan(out.loc[(pd.Timestamp("2023-06-01"), 10), "rte_j1_debiaisee"])
+    assert np.isnan(out.loc[(pd.Timestamp("2023-06-01"), 10), "rte_j1_profil"])

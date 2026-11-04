@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 FIRST_TRAIN_YEAR = 2013
 TARGET_MODES = ("ratio", "absolute")
+RTE_COLUMNS = ["rte_j1", "rte_j1_debiaisee", "rte_j1_profil"]
 
 
 @dataclass
@@ -91,21 +92,30 @@ def long(m: pd.DataFrame, name: str) -> pd.Series:
 
 
 def rte_columns(mats: Matrices, index: pd.MultiIndex) -> pd.DataFrame:
-    """Prévision J-1 de RTE, brute et corrigée de son biais moyen de l'année précédente.
+    """Prévision J-1 de RTE, brute et corrigée de son écart moyen de l'année précédente.
 
-    La version corrigée n'est pas un produit de RTE : c'est un contrôle. Mesurée
-    contre les données définitives, la prévision J-1 sous-estime en moyenne la
-    consommation (d'environ 1 GW depuis 2023) ; on vérifie ce que donnerait une
-    simple correction de ce biais, estimée sur l'année Y-1 pour prévoir Y.
+    Les versions corrigées ne sont pas des produits de RTE : ce sont des
+    contrôles. Mesurée contre les données définitives, la prévision J-1
+    sous-estime la consommation (d'environ 1 GW depuis 2023), avec un écart qui
+    dépend de l'heure et du mois. Pour prévoir l'année Y, on retire :
+    - `rte_j1_debiaisee` : l'écart moyen de l'année Y-1 (une constante) ;
+    - `rte_j1_profil` : l'écart moyen de Y-1 par mois et par demi-heure.
     """
     rte = long(mats.rte_j1, "rte_j1")
     y = long(mats.load, "y")
     err = (rte - y).dropna()
-    yearly_bias = err.groupby(pd.DatetimeIndex(err.index.get_level_values("date")).year).mean()
+    err_dates = pd.DatetimeIndex(err.index.get_level_values("date"))
+    err_slots = err.index.get_level_values("slot")
+    yearly = err.groupby(err_dates.year).mean()
+    profile = err.groupby([err_dates.year, err_dates.month, err_slots]).mean()
+
     out = pd.DataFrame({"rte_j1": rte.reindex(index)})
-    years = pd.DatetimeIndex(index.get_level_values("date")).year
-    prev_bias = pd.Series(years - 1).map(yearly_bias).to_numpy()
-    out["rte_j1_debiaisee"] = out["rte_j1"].to_numpy() - prev_bias
+    dates = pd.DatetimeIndex(index.get_level_values("date"))
+    slots = index.get_level_values("slot")
+    prev = dates.year - 1
+    out["rte_j1_debiaisee"] = out["rte_j1"].to_numpy() - pd.Series(prev).map(yearly).to_numpy()
+    keys = pd.MultiIndex.from_arrays([prev, dates.month, slots])
+    out["rte_j1_profil"] = out["rte_j1"].to_numpy() - profile.reindex(keys).to_numpy()
     return out
 
 
@@ -183,6 +193,31 @@ def cached_fold(name: str, fold: Fold, compute, targets):
     return preds
 
 
+def feature_importance(model: LGBMForecaster, feat: pd.DataFrame, n: int = 8000) -> pd.DataFrame:
+    """Part moyenne de chaque variable dans les contributions SHAP, et gain LightGBM."""
+    sample = feat.dropna(subset=["y"])
+    sample = sample.sample(n=min(len(sample), n), random_state=0)
+    shap = model.shap_values(sample).abs().mean().sort_values(ascending=False)
+    gain = pd.Series(model.booster_.feature_importance("gain"), index=model.booster_.feature_name())
+    imp = pd.DataFrame({"mean_abs_shap": shap, "gain": gain.reindex(shap.index)})
+    imp["shap_share"] = imp["mean_abs_shap"] / imp["mean_abs_shap"].sum()
+    imp.index.name = "feature"
+    return imp
+
+
+def cached_test(name: str, fold: Fold, compute, targets):
+    """Comme `cached_fold`, pour le test : prévisions et importance des variables."""
+    base = config.PROCESSED_DIR / "cache" / f"{name}_{fold.name}_{_cache_key(targets)}"
+    pred_path, imp_path = Path(f"{base}.parquet"), Path(f"{base}_importance.parquet")
+    if pred_path.exists() and imp_path.exists():
+        log.info("test %s relu depuis le cache", fold.name)
+        return pd.read_parquet(pred_path), pd.read_parquet(imp_path)
+    preds, imp = compute()
+    _write_parquet(imp, imp_path)
+    _write_parquet(preds, pred_path)
+    return preds, imp
+
+
 def _add_groups(p: pd.DataFrame) -> pd.DataFrame:
     dates = p.index.get_level_values("date")
     p = p.copy()
@@ -219,7 +254,7 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
         bt = bt.join(rte_columns(mats, bt.index))
     bt_models = ["persistance_j7", "moyenne_saisonniere"] + [f"lightgbm_{t}" for t in targets]
     if has_rte:
-        bt_models += ["rte_j1", "rte_j1_debiaisee"]
+        bt_models += RTE_COLUMNS
     by_year = score_table(bt, bt_models, by="year")
     mean_mape = by_year.groupby("model")["mape"].mean()
     best = min(targets, key=lambda t: mean_mape[f"lightgbm_{t}"])
@@ -232,13 +267,18 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
         b = forecast_bias(mats.temp_obs, fc, bias_start, bias_end)
         tf[label] = build_features(mats.load, mats.temp_obs, fc + b, mats.cal)
     tf["obs"] = feat
-    test_p, models = run_fold(feat, mats.cal, test_fold, targets=(best,), test_feats=tf)
+
+    def compute_test():
+        preds, models = run_fold(feat, mats.cal, test_fold, targets=(best,), test_feats=tf)
+        return preds, feature_importance(models[best], tf["fc_d2"].loc[preds.index])
+
+    test_p, imp = cached_test(name, test_fold, compute_test, (best, "test"))
     test_p = _add_groups(test_p)
     if has_rte:
         test_p = test_p.join(rte_columns(mats, test_p.index))
 
     test_models = ["persistance_j7", "moyenne_saisonniere", "lightgbm_fc_d2", "lightgbm_fc_d1",
-                   "lightgbm_obs"] + (["rte_j1", "rte_j1_debiaisee"] if has_rte else [])
+                   "lightgbm_obs"] + (RTE_COLUMNS if has_rte else [])
     out_dir = config.RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = "" if name == "national" else f"{name}_"
@@ -252,15 +292,6 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
     _write_csv(score_table(test_p, test_models, by="hour"), out_dir / f"{prefix}test_by_hour.csv",
                index=False, float_format="%.4f")
 
-    # Importance des variables : SHAP natif de LightGBM sur l'année de test
-    model = models[best]
-    sample = tf["fc_d2"].loc[test_p.index].dropna(subset=["y"])
-    sample = sample.sample(n=min(len(sample), 8000), random_state=0)
-    shap = model.shap_values(sample).abs().mean().sort_values(ascending=False)
-    gain = pd.Series(model.booster_.feature_importance("gain"),
-                     index=model.booster_.feature_name())
-    imp = pd.DataFrame({"mean_abs_shap": shap, "gain": gain.reindex(shap.index)})
-    imp["shap_share"] = imp["mean_abs_shap"] / imp["mean_abs_shap"].sum()
     _write_csv(imp, out_dir / f"{prefix}feature_importance.csv", float_format="%.6f")
 
     config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
@@ -290,7 +321,7 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
         summary["daily_win_rate_vs_rte"] = {
             f"{m}_vs_{r}": daily_win_rate(test_p, m, r)
             for m in ("lightgbm_fc_d2", "lightgbm_fc_d1", "lightgbm_obs")
-            for r in ("rte_j1", "rte_j1_debiaisee")
+            for r in RTE_COLUMNS
         }
     _write_text(out_dir / f"{prefix}summary.json", json.dumps(summary, indent=2, ensure_ascii=False))
     log.info("test %s : %s", name, test_all[["model", "mape", "rmse"]].round(3).to_dict("records"))

@@ -226,9 +226,9 @@ def fetch_school_holidays(session=None) -> Path:
     return path
 
 
-def download_all() -> None:
+def download_all(throttle: Throttle | None = None) -> None:
     session = _session()
-    throttle = Throttle()
+    throttle = throttle or Throttle()
     fetch_eco2mix_national(range(config.FIRST_LOAD_YEAR, config.LAST_YEAR + 1), session)
     fetch_eco2mix_region(config.NA_REGION, range(config.FIRST_LOAD_YEAR + 1, config.LAST_YEAR + 1), session)
     regions = sorted({c.region for c in config.NATIONAL_CITIES})

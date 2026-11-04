@@ -1,15 +1,14 @@
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import synthetic_half_hourly
 
 from eco2mix_forecast import config
-from eco2mix_forecast.backtest import fold_masks, run_fold, yearly_folds, Fold
+from eco2mix_forecast.backtest import Fold, fold_masks, run_fold, yearly_folds
 from eco2mix_forecast.calendar_fr import daily_calendar
 from eco2mix_forecast.dataset import to_daily_matrix
 from eco2mix_forecast.features import build_features
 from eco2mix_forecast.models import LGBMForecaster, SeasonalMean, persistence_j7
-
-from conftest import synthetic_half_hourly
 
 
 def test_folds_are_expanding_and_exclude_test_year():

@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from eco2mix_forecast.calendar_fr import daily_calendar
 from eco2mix_forecast.dataset import to_daily_matrix
 from eco2mix_forecast.features import CUTOFF_SLOT, FEATURES, TEMP_FEATURES, build_features
-from eco2mix_forecast.calendar_fr import daily_calendar
 
 TARGET_TEMP = ["temp", "temp_mean", "temp_min", "temp_max", "temp_delta"]
 

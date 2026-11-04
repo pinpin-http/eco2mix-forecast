@@ -3,9 +3,15 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-from eco2mix_forecast.calendar_fr import (bridge_days, daily_calendar, day_type, easter,
-                                          half_hours_in_local_day, public_holidays,
-                                          school_holiday_zones)
+from eco2mix_forecast.calendar_fr import (
+    bridge_days,
+    daily_calendar,
+    day_type,
+    easter,
+    half_hours_in_local_day,
+    public_holidays,
+    school_holiday_zones,
+)
 
 
 @pytest.mark.parametrize("year,expected", [

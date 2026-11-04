@@ -132,9 +132,9 @@ def build_temperatures(cities, weights) -> pd.DataFrame:
         paths = [config.RAW_DIR / "weather" / f"era5_{c.name}_{y}.json"
                  for y in _years(config.FIRST_WEATHER_YEAR)]
         obs[c.name] = pd.concat([read_open_meteo(p, ["temperature_2m"]) for p in paths])["temperature_2m"]
-        fc = read_open_meteo(
-            config.RAW_DIR / "weather" / f"forecast_{config.FORECAST_MODEL}_{c.name}_{config.FORECAST_START}_{fc_end}.json",
-            ["temperature_2m_previous_day1", "temperature_2m_previous_day2"])
+        fc_name = f"forecast_{config.FORECAST_MODEL}_{c.name}_{config.FORECAST_START}_{fc_end}.json"
+        fc = read_open_meteo(config.RAW_DIR / "weather" / fc_name,
+                             ["temperature_2m_previous_day1", "temperature_2m_previous_day2"])
         d1[c.name] = fc["temperature_2m_previous_day1"]
         d2[c.name] = fc["temperature_2m_previous_day2"]
     out = pd.DataFrame({

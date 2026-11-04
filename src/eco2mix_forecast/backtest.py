@@ -151,7 +151,7 @@ def daily_win_rate(p: pd.DataFrame, a: str, b: str) -> float:
     return float((daily[a] < daily[b]).mean())
 
 
-def run_region(name: str, has_rte: bool) -> dict:
+def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
     log.info("=== %s ===", name)
     mats = load_matrices(name)
     feat = build_features(mats.load, mats.temp_obs, mats.temp_obs, mats.cal)
@@ -161,18 +161,18 @@ def run_region(name: str, has_rte: bool) -> dict:
     bt = []
     for fold in folds:
         log.info("pli %s : entraînement %s-%s", fold.name, *fold.train_years)
-        p, _ = run_fold(feat, mats.cal, fold)
+        p, _ = run_fold(feat, mats.cal, fold, targets=targets)
         p["fold"] = fold.name
         bt.append(p)
     bt = _add_groups(pd.concat(bt))
     if has_rte:
         bt = bt.join(rte_columns(mats, bt.index))
-    bt_models = ["persistance_j7", "moyenne_saisonniere"] + [f"lightgbm_{t}" for t in TARGET_MODES]
+    bt_models = ["persistance_j7", "moyenne_saisonniere"] + [f"lightgbm_{t}" for t in targets]
     if has_rte:
         bt_models += ["rte_j1", "rte_j1_debiaisee"]
     by_year = score_table(bt, bt_models, by="year")
     mean_mape = by_year.groupby("model")["mape"].mean()
-    best = min(TARGET_MODES, key=lambda t: mean_mape[f"lightgbm_{t}"])
+    best = min(targets, key=lambda t: mean_mape[f"lightgbm_{t}"])
     log.info("MAPE moyen du backtest : %s ; cible retenue : %s", mean_mape.round(3).to_dict(), best)
 
     # 2. Test final : prévision météo corrigée du biais moyen observé sur 2024
@@ -248,5 +248,7 @@ def run_region(name: str, has_rte: bool) -> dict:
 
 
 def run_all() -> None:
-    run_region("national", has_rte=True)
-    run_region("nouvelle_aquitaine", has_rte=False)
+    national = run_region("national", has_rte=True)
+    # Pour la région, on reprend la cible choisie sur le backtest national
+    # (moitié moins d'entraînements).
+    run_region("nouvelle_aquitaine", has_rte=False, targets=(national["target_mode"],))

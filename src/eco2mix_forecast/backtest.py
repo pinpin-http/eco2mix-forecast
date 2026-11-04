@@ -12,17 +12,20 @@ Déroulé :
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from . import config, dataset
-from .features import CUTOFF_SLOT, build_features
+from .features import CUTOFF_SLOT, FEATURES, build_features
 from .metrics import score_table, season_of
-from .models import LGBMForecaster, SeasonalMean, persistence_j7
+from .models import DEFAULT_PARAMS, LGBMForecaster, SeasonalMean, persistence_j7
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +137,52 @@ def run_fold(feat: pd.DataFrame, cal: pd.DataFrame, fold: Fold, targets=TARGET_M
     return preds, models
 
 
+# --- Cache des plis ---------------------------------------------------------------
+# Un pli déjà calculé avec les mêmes variables et les mêmes réglages est relu
+# depuis data/processed/cache/ : une coupure en cours de backtest ne fait perdre
+# que le pli en cours.
+
+def _cache_key(targets) -> str:
+    blob = json.dumps({"features": FEATURES, "params": DEFAULT_PARAMS, "targets": list(targets),
+                       "last_year": config.LAST_YEAR}, sort_keys=True)
+    return hashlib.sha1(blob.encode()).hexdigest()[:10]
+
+
+def _fsync(path: Path) -> None:
+    with open(path, "rb+") as f:
+        os.fsync(f.fileno())
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".part")
+    df.to_parquet(tmp)
+    _fsync(tmp)
+    tmp.replace(path)
+
+
+def _write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".part")
+    tmp.write_text(text)
+    _fsync(tmp)
+    tmp.replace(path)
+
+
+def _write_csv(df: pd.DataFrame, path: Path, **kw) -> None:
+    _write_text(path, df.to_csv(**kw))
+
+
+def cached_fold(name: str, fold: Fold, compute, targets):
+    path = config.PROCESSED_DIR / "cache" / f"{name}_{fold.name}_{_cache_key(targets)}.parquet"
+    if path.exists():
+        log.info("pli %s relu depuis le cache", fold.name)
+        return pd.read_parquet(path)
+    preds = compute()
+    _write_parquet(preds, path)
+    return preds
+
+
 def _add_groups(p: pd.DataFrame) -> pd.DataFrame:
     dates = p.index.get_level_values("date")
     p = p.copy()
@@ -161,7 +210,8 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
     bt = []
     for fold in folds:
         log.info("pli %s : entraînement %s-%s", fold.name, *fold.train_years)
-        p, _ = run_fold(feat, mats.cal, fold, targets=targets)
+        p = cached_fold(name, fold, lambda f=fold: run_fold(feat, mats.cal, f, targets=targets)[0],
+                        targets)
         p["fold"] = fold.name
         bt.append(p)
     bt = _add_groups(pd.concat(bt))
@@ -192,15 +242,15 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
     out_dir = config.RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = "" if name == "national" else f"{name}_"
-    by_year.to_csv(out_dir / f"{prefix}backtest_by_year.csv", index=False, float_format="%.4f")
-    score_table(bt, bt_models).to_csv(out_dir / f"{prefix}backtest_overall.csv", index=False,
-                                      float_format="%.4f")
+    _write_csv(by_year, out_dir / f"{prefix}backtest_by_year.csv", index=False, float_format="%.4f")
+    _write_csv(score_table(bt, bt_models), out_dir / f"{prefix}backtest_overall.csv", index=False,
+               float_format="%.4f")
     test_all = score_table(test_p, test_models)
-    test_all.to_csv(out_dir / f"{prefix}test_overall.csv", index=False, float_format="%.4f")
-    score_table(test_p, test_models, by="season").to_csv(out_dir / f"{prefix}test_by_season.csv",
-                                                         index=False, float_format="%.4f")
-    score_table(test_p, test_models, by="hour").to_csv(out_dir / f"{prefix}test_by_hour.csv",
-                                                       index=False, float_format="%.4f")
+    _write_csv(test_all, out_dir / f"{prefix}test_overall.csv", index=False, float_format="%.4f")
+    _write_csv(score_table(test_p, test_models, by="season"), out_dir / f"{prefix}test_by_season.csv",
+               index=False, float_format="%.4f")
+    _write_csv(score_table(test_p, test_models, by="hour"), out_dir / f"{prefix}test_by_hour.csv",
+               index=False, float_format="%.4f")
 
     # Importance des variables : SHAP natif de LightGBM sur l'année de test
     model = models[best]
@@ -211,11 +261,11 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
                      index=model.booster_.feature_name())
     imp = pd.DataFrame({"mean_abs_shap": shap, "gain": gain.reindex(shap.index)})
     imp["shap_share"] = imp["mean_abs_shap"] / imp["mean_abs_shap"].sum()
-    imp.to_csv(out_dir / f"{prefix}feature_importance.csv", float_format="%.6f")
+    _write_csv(imp, out_dir / f"{prefix}feature_importance.csv", float_format="%.6f")
 
     config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    bt.to_parquet(config.PROCESSED_DIR / f"{prefix}pred_backtest.parquet")
-    test_p.to_parquet(config.PROCESSED_DIR / f"{prefix}pred_test.parquet")
+    _write_parquet(bt, config.PROCESSED_DIR / f"{prefix}pred_backtest.parquet")
+    _write_parquet(test_p, config.PROCESSED_DIR / f"{prefix}pred_test.parquet")
 
     # Erreur des prévisions météo sur l'année de test (après correction du biais)
     y0, y1 = f"{config.TEST_YEAR}-01-01", f"{config.TEST_YEAR}-12-31"
@@ -242,7 +292,7 @@ def run_region(name: str, has_rte: bool, targets=TARGET_MODES) -> dict:
             for m in ("lightgbm_fc_d2", "lightgbm_fc_d1", "lightgbm_obs")
             for r in ("rte_j1", "rte_j1_debiaisee")
         }
-    (out_dir / f"{prefix}summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+    _write_text(out_dir / f"{prefix}summary.json", json.dumps(summary, indent=2, ensure_ascii=False))
     log.info("test %s : %s", name, test_all[["model", "mape", "rmse"]].round(3).to_dict("records"))
     return summary
 

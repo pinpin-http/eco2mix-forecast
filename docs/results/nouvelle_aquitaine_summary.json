@@ -1,0 +1,57 @@
+{
+  "region": "nouvelle_aquitaine",
+  "target_mode": "absolute",
+  "backtest_mean_mape": {
+    "lightgbm_absolute": 2.7102948832932547,
+    "moyenne_saisonniere": 8.138314366990153,
+    "persistance_j7": 8.395347012449003
+  },
+  "test": {
+    "persistance_j7": {
+      "mape": 8.887534315405246,
+      "rmse": 655.8316730613207,
+      "mae": 447.3424086757991,
+      "bias": -11.240582191780822,
+      "n": 17520
+    },
+    "moyenne_saisonniere": {
+      "mape": 8.16115610916967,
+      "rmse": 502.4390032133857,
+      "mae": 388.83907207699247,
+      "bias": 166.53952733917427,
+      "n": 17520
+    },
+    "lightgbm_fc_d2": {
+      "mape": 2.827007009038415,
+      "rmse": 175.1118485538681,
+      "mae": 133.61168906625306,
+      "bias": 33.423308822464534,
+      "n": 17520
+    },
+    "lightgbm_fc_d1": {
+      "mape": 2.777784505450185,
+      "rmse": 171.59553176902537,
+      "mae": 131.24530223822072,
+      "bias": 33.189514817776136,
+      "n": 17520
+    },
+    "lightgbm_obs": {
+      "mape": 2.6406010960517983,
+      "rmse": 159.60816108288296,
+      "mae": 123.97617589997242,
+      "bias": 33.294741166193326,
+      "n": 17520
+    }
+  },
+  "temperature_forecast_error_test": {
+    "fc_d2": {
+      "mae_degC": 0.9457428096216538,
+      "bias_correction_mean_degC": 0.04105773545936841
+    },
+    "fc_d1": {
+      "mae_degC": 0.828444526800512,
+      "bias_correction_mean_degC": 0.08995630661048777
+    }
+  },
+  "cutoff": "jour D, créneau 24 (12:00 heure de Paris)"
+}

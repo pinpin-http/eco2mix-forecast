@@ -1,0 +1,93 @@
+{
+  "region": "national",
+  "target_mode": "absolute",
+  "backtest_mean_mape": {
+    "lightgbm_absolute": 1.8349048535294266,
+    "lightgbm_ratio": 1.9545006014409363,
+    "moyenne_saisonniere": 7.113517071571104,
+    "persistance_j7": 6.35767539859081,
+    "rte_j1": 1.9995760699333454,
+    "rte_j1_debiaisee": 1.7372112333436915,
+    "rte_j1_profil": 1.6714514156351274
+  },
+  "test": {
+    "persistance_j7": {
+      "mape": 6.411151992734311,
+      "rmse": 5138.750183611648,
+      "mae": 3450.700114155251,
+      "bias": -92.09691780821917,
+      "n": 17520
+    },
+    "moyenne_saisonniere": {
+      "mape": 6.631600406070056,
+      "rmse": 4317.199312841871,
+      "mae": 3365.5110090172097,
+      "bias": 2315.335960742253,
+      "n": 17520
+    },
+    "lightgbm_fc_d2": {
+      "mape": 1.701442721216851,
+      "rmse": 1234.324907735036,
+      "mae": 893.0484410661297,
+      "bias": 318.5026319857302,
+      "n": 17520
+    },
+    "lightgbm_fc_d1": {
+      "mape": 1.6816156962354865,
+      "rmse": 1219.041817095309,
+      "mae": 883.469210133537,
+      "bias": 317.20170691664936,
+      "n": 17520
+    },
+    "lightgbm_obs": {
+      "mape": 1.6070985280093188,
+      "rmse": 1138.9385673349318,
+      "mae": 841.6057929013858,
+      "bias": 285.1213262740307,
+      "n": 17520
+    },
+    "rte_j1": {
+      "mape": 2.6694614055713357,
+      "rmse": 1656.3882145176742,
+      "mae": 1323.6394406392694,
+      "bias": -972.9473173515981,
+      "n": 17520
+    },
+    "rte_j1_debiaisee": {
+      "mape": 2.1277384029411834,
+      "rmse": 1351.6596449211663,
+      "mae": 1061.2828926451998,
+      "bias": 173.1714781857416,
+      "n": 17520
+    },
+    "rte_j1_profil": {
+      "mape": 1.7219695881101726,
+      "rmse": 1164.0527488262285,
+      "mae": 880.9888046967457,
+      "bias": 172.47873563218388,
+      "n": 17520
+    }
+  },
+  "temperature_forecast_error_test": {
+    "fc_d2": {
+      "mae_degC": 0.6555171604638397,
+      "bias_correction_mean_degC": 0.29491669389664305
+    },
+    "fc_d1": {
+      "mae_degC": 0.5825567015522081,
+      "bias_correction_mean_degC": 0.3189055852526162
+    }
+  },
+  "cutoff": "jour D, créneau 24 (12:00 heure de Paris)",
+  "daily_win_rate_vs_rte": {
+    "lightgbm_fc_d2_vs_rte_j1": 0.7287671232876712,
+    "lightgbm_fc_d2_vs_rte_j1_debiaisee": 0.6904109589041096,
+    "lightgbm_fc_d2_vs_rte_j1_profil": 0.5452054794520548,
+    "lightgbm_fc_d1_vs_rte_j1": 0.7452054794520548,
+    "lightgbm_fc_d1_vs_rte_j1_debiaisee": 0.684931506849315,
+    "lightgbm_fc_d1_vs_rte_j1_profil": 0.5506849315068493,
+    "lightgbm_obs_vs_rte_j1": 0.7753424657534247,
+    "lightgbm_obs_vs_rte_j1_debiaisee": 0.7150684931506849,
+    "lightgbm_obs_vs_rte_j1_profil": 0.5780821917808219
+  }
+}

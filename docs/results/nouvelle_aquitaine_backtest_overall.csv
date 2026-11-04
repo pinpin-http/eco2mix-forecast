@@ -1,0 +1,4 @@
+group,model,n,mape,rmse,mae,bias
+all,persistance_j7,105216,8.3951,598.0989,421.0582,0.1249
+all,moyenne_saisonniere,105216,8.1389,534.3222,392.7976,157.4030
+all,lightgbm_absolute,105216,2.7103,175.2453,128.8855,32.0465

@@ -1,0 +1,31 @@
+[project]
+name = "eco2mix-forecast"
+version = "0.1.0"
+description = "Prévision J+1 de la consommation électrique française (éCO2mix), comparée à la prévision J-1 de RTE"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "lightgbm==4.7.0",
+    "matplotlib==3.11.2",
+    "numpy==2.5.4",
+    "pandas==3.1.0",
+    "pyarrow==26.0.1",
+    "requests==2.34.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eco2mix_forecast"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]

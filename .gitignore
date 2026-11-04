@@ -1,0 +1,16 @@
+# environnement
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# données téléchargées et intermédiaires (recréées par `make data`)
+data/
+
+# divers
+.DS_Store
+.idea/
+.vscode/

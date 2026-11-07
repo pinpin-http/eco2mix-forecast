@@ -52,13 +52,13 @@ Aucune variable du jour cible ne lit une donnée postérieure à la coupure, et 
 
 ### La météo du jour cible
 
-C'est le point faible, autant le dire tout de suite. L'archive de prévisions utilisée (Previous Runs API d'Open-Meteo, ouverte et sans inscription) ne commence qu'en février 2024 pour ECMWF IFS, et en 2021 pour GFS. Il existe des archives plus anciennes (TIGGE chez ECMWF, par exemple), mais elles demandent une inscription et un autre outillage. Le modèle est donc entraîné avec la température observée (réanalyse ERA5) à la place de la prévision, et le backtest 2019-2024 utilise lui aussi l'observé : ses chiffres sont optimistes, ils supposent une météo parfaitement prévue.
+C'est le point faible du projet. L'archive de prévisions utilisée (Previous Runs API d'Open-Meteo, ouverte et sans inscription) ne commence qu'en février 2024 pour ECMWF IFS, et en 2021 pour GFS. Il existe des archives plus anciennes (TIGGE chez ECMWF, par exemple), mais elles demandent une inscription et un autre outillage. Le modèle est donc entraîné avec la température observée (réanalyse ERA5) à la place de la prévision, et le backtest 2019-2024 utilise lui aussi l'observé : ses chiffres sont optimistes, ils supposent une météo parfaitement prévue.
 
 Pour 2025, en revanche, on a les vraies prévisions archivées d'ECMWF IFS. Le modèle entraîné sur l'observé 2013-2024 est appliqué avec trois sources de température pour D+1 :
 
 | Variante | Source de la température de D+1 | Statut |
 |---|---|---|
-| `lightgbm_fc_d2` | prévision émise 48 h avant chaque demi-heure cible (`previous_day2`) | strictement disponible à midi la veille : **c'est le chiffre de référence** |
+| `lightgbm_fc_d2` | prévision émise 48 h avant chaque demi-heure cible (`previous_day2`) | strictement disponible à midi la veille ; c'est le chiffre de référence |
 | `lightgbm_fc_d1` | prévision émise 24 h avant (`previous_day1`) | un peu optimiste : pour une partie des demi-heures de D+1, elle vient d'un run publié après midi la veille |
 | `lightgbm_obs` | température observée (ERA5) | borne haute, météo parfaite |
 
@@ -173,7 +173,7 @@ L'erreur relative est plus forte qu'au niveau national (2,83 % contre 1,70 %), c
 
 Le modèle apprend sur des températures observées et reçoit des prévisions en 2025. Les deux n'ont pas la même distribution d'erreur, et la correction de l'écart moyen n'en rattrape qu'une partie. Entraîner directement sur des prévisions archivées serait plus propre, mais l'archive ouverte ne remonte qu'à février 2024.
 
-ERA5 n'est pas une station météo : c'est une réanalyse sur une grille d'environ 30 km, publiée avec quelques jours de retard. En exploitation, il faudrait des observations de stations pour la veille et la matinée du jour D. De la même façon, les retards de consommation viennent ici des données définitives, alors qu'à midi le jour D on n'aurait que les données temps réel, un peu différentes.
+ERA5 est une réanalyse sur une grille d'environ 30 km, publiée avec quelques jours de retard. En exploitation, il faudrait des observations de stations pour la veille et la matinée du jour D. De la même façon, les retards de consommation viennent ici des données définitives, alors qu'à midi le jour D on n'aurait que les données temps réel, un peu différentes.
 
 Une ville par région, c'est une approximation grossière du climat. Ni la nébulosité, ni le vent, ni le rayonnement ne sont utilisés, alors qu'ils jouent sur l'éclairage, le ressenti et le solaire en autoconsommation.
 
